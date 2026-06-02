@@ -1,0 +1,12 @@
+# Local config & cache (hold the live API key and personal item data)
+everdo/.everdo_config.json
+everdo/.everdo_state.json
+
+# Local-only end-to-end tests (hit a live server with real credentials)
+selftest.py
+selftest_cache.py
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
