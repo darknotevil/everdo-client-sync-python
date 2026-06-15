@@ -1,6 +1,6 @@
 # everdo-client-sync-python
 
-Python client + CLI for a self-hosted Everdo server. Uses the `/sync` protocol (not the create-only `/api/items`) so it can read, mutate, and delete items, backed by a persistent local cache (`everdo/.everdo_state.json`).
+Python client + CLI for a self-hosted Everdo server. Uses the `/sync` protocol (not the create-only `/api/items`) so it can read, mutate, and delete items, backed by a persistent local cache (`~/.config/everdo/state.json`, XDG-respecting).
 
 ## Setup
 
@@ -13,19 +13,30 @@ Python client + CLI for a self-hosted Everdo server. Uses the `/sync` protocol (
 
   After this, no flags or env vars are needed. Precedence: `--flag` > env (`EVERDO_HOST` / `EVERDO_KEY` / `EVERDO_VERSION`) > config file.
 
+### Config file locations
+
+The CLI looks for its config in this order (first existing file wins):
+
+1. `--config <path>` — explicit override via CLI flag
+2. `$XDG_CONFIG_HOME/everdo/config.json` (or `~/.config/everdo/config.json` if `XDG_CONFIG_HOME` is unset) — XDG Base Directory default
+3. `<repo-root>/.config/everdo/config.json` — portable, per-checkout fallback
+
+When saving (`config set`), the config is written to whichever path was used for reading.
+If no config exists yet, it defaults to the XDG location.
+
 ## Agent guides
 
 Load only what the current task needs:
 
-- [.agents/skill.md](.agents/skill.md) — skill manifest / entry point
-- [.agents/data-model.md](.agents/data-model.md) — lists, types, parent_id, ID prefixes
-- [.agents/reading.md](.agents/reading.md) — listing, searching, JSON vs compact
-- [.agents/mutating.md](.agents/mutating.md) — create/complete/move/convert/assign/etc., batch behavior
-- [.agents/projects-notebooks.md](.agents/projects-notebooks.md) — attaching items, auto-promote rule
-- [.agents/cache.md](.agents/cache.md) — refresh, state file, drift recovery
-- [.agents/recipes.md](.agents/recipes.md) — common end-to-end workflows
-- [.agents/troubleshooting.md](.agents/troubleshooting.md) — errors and anti-patterns
+- [.agent/skills/everdo-cli/skill.md](.agent/skills/everdo-cli/skill.md) — skill manifest / entry point
+- [.agent/skills/everdo-cli/data-model.md](.agent/skills/everdo-cli/data-model.md) — lists, types, parent_id, ID prefixes
+- [.agent/skills/everdo-cli/reading.md](.agent/skills/everdo-cli/reading.md) — listing, searching, JSON vs compact
+- [.agent/skills/everdo-cli/mutating.md](.agent/skills/everdo-cli/mutating.md) — create/complete/move/convert/assign/etc., batch behavior
+- [.agent/skills/everdo-cli/projects-notebooks.md](.agent/skills/everdo-cli/projects-notebooks.md) — attaching items, auto-promote rule
+- [.agent/skills/everdo-cli/cache.md](.agent/skills/everdo-cli/cache.md) — refresh, state file, drift recovery
+- [.agent/skills/everdo-cli/recipes.md](.agent/skills/everdo-cli/recipes.md) — common end-to-end workflows
+- [.agent/skills/everdo-cli/troubleshooting.md](.agent/skills/everdo-cli/troubleshooting.md) — errors and anti-patterns
 
 ## Project internals (for contributors)
 
-- [.agents/memory-bank/](.agents/memory-bank/) — architecture, sync protocol, tech stack, roadmap
+- [.agent/memory-bank/](.agent/memory-bank/) — architecture, sync protocol, tech stack, roadmap

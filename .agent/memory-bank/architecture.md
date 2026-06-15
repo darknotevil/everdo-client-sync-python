@@ -20,7 +20,7 @@ Dependencies: `everdo_cli` → `everdo.tasks` + `everdo.client`; `everdo.tasks` 
 
 ## State file layout
 
-`everdo/.everdo_state.json` is the on-disk cache. Shape:
+The on-disk cache lives at `state.json` inside the resolved config directory (see *Config file resolution* below — same `_resolve()` is used for both `config.json` and `state.json`). Shape:
 
 ```
 {
@@ -41,3 +41,15 @@ Dependencies: `everdo_cli` → `everdo.tasks` + `everdo.client`; `everdo.tasks` 
 Both `items` and `tags` are **dicts keyed by id**, NOT lists. Iterate via `state["items"].values()`. Iterating `state["items"]` itself yields id strings — `item["title"]` on a string raises `TypeError`.
 
 Path can be overridden via `EverdoClient(..., state_path=...)`. Useful for tests with a throwaway state file in `/tmp/`.
+
+## Config file resolution
+
+CLI config (`host`, `key`, `version`) and the state cache share the same directory lookup, implemented by `_resolve()` in `everdo/paths.py`. Priority (highest → lowest):
+
+1. **`--config` CLI flag** — explicit path override (config only; state stays in the resolved dir).
+2. **XDG default** `$XDG_CONFIG_HOME/everdo/<file>` (or `~/.config/everdo/<file>` when `XDG_CONFIG_HOME` is unset).
+3. **Portable fallback** `<repo-root>/.config/everdo/<file>` — per-checkout, useful for sandboxed/portable installs.
+
+When *reading*, the first existing file wins. When *writing* (`config set`), the config is saved to whichever path was selected during read. If no config file exists yet, the XDG location is used as the default write target.
+
+The `--config` flag can force any arbitrary path, bypassing the auto-detection entirely.

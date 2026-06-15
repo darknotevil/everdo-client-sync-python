@@ -7,7 +7,7 @@ description: Read and modify tasks/projects/notebooks on a self-hosted Everdo se
 
 CLI lives at `everdo-client-sync-python/everdo_cli.py`. Every invocation is short-lived; reads are served from a local cache that auto-syncs incrementally.
 
-For setup and config precedence, see the root [AGENTS.md](../AGENTS.md).
+For setup and config precedence, see the root [AGENTS.md](../../../AGENTS.md).
 
 ## Topical guides
 

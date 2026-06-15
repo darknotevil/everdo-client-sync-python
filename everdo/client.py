@@ -29,6 +29,8 @@ from typing import Any
 import requests
 import urllib3
 
+from . import paths
+
 # The server uses a self-signed certificate; silence the noisy per-request warning.
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -51,7 +53,8 @@ class EverdoClient:
         ``>= 1.0.6-3`` works; the default is deliberately high.
     state_path:
         Where to persist ``last_sync_ts`` between runs so we behave like a proper
-        incremental client. Defaults to ``.everdo_state.json`` next to this file.
+        incremental client. Defaults to the shared XDG location (see
+        ``everdo.paths.state_path``).
     """
 
     def __init__(
@@ -70,9 +73,7 @@ class EverdoClient:
         self.version = version
         self.verify = verify
         self.timeout = timeout
-        self.state_path = state_path or os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), ".everdo_state.json"
-        )
+        self.state_path = state_path or str(paths.state_path())
         self._session = requests.Session()
 
     # ------------------------------------------------------------------ state
@@ -86,6 +87,7 @@ class EverdoClient:
     def _save_state(self, **values: Any) -> None:
         state = self._load_state()
         state.update(values)
+        os.makedirs(os.path.dirname(self.state_path) or ".", exist_ok=True)
         tmp = self.state_path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(state, fh, ensure_ascii=False, indent=2)

@@ -33,46 +33,58 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from everdo import EverdoClient, EverdoError, EverdoTasks, LISTS  # noqa: E402
-
-CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "everdo", ".everdo_config.json"
-)
+from everdo import paths  # noqa: E402
 
 
-def _load_config() -> dict:
+def _get_config_path(explicit_path=None) -> str:
+    """Resolve config path.
+
+    Priority (reading): ``--config`` flag > XDG > project-root ``.config``
+    (see :mod:`everdo.paths`). Writes go to whichever location was found, or
+    XDG if neither exists yet.
+    """
+    if explicit_path:
+        return explicit_path
+    return str(paths.config_path())
+
+
+def _load_config(config_path=None) -> dict:
+    path = _get_config_path(config_path)
     try:
-        with open(CONFIG_PATH, encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             return json.load(fh)
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
 
 
-def _save_config(cfg: dict) -> None:
-    tmp = CONFIG_PATH + ".tmp"
+def _save_config(cfg: dict, config_path=None) -> None:
+    path = _get_config_path(config_path)
+    tmp = path + ".tmp"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(cfg, fh, ensure_ascii=False, indent=2)
-    os.replace(tmp, CONFIG_PATH)
+    os.replace(tmp, path)
     try:
-        os.chmod(CONFIG_PATH, 0o600)
+        os.chmod(path, 0o600)
     except OSError:
         pass
 
 
-def _resolve(name: str, cli_value, env_var: str, default=None):
+def _resolve(name: str, cli_value, env_var: str, default=None, config_path=None):
     """Priority: CLI flag > env var > config file > default."""
     if cli_value:
         return cli_value
     env = os.environ.get(env_var)
     if env:
         return env
-    cfg = _load_config()
+    cfg = _load_config(config_path)
     return cfg.get(name, default)
 
 
 def _client(args) -> EverdoClient:
-    host = _resolve("host", args.host, "EVERDO_HOST")
-    key = _resolve("key", args.key, "EVERDO_KEY")
-    version = _resolve("version", args.version, "EVERDO_VERSION", default="1.99.0")
+    host = _resolve("host", args.host, "EVERDO_HOST", config_path=getattr(args, "config", None))
+    key = _resolve("key", args.key, "EVERDO_KEY", config_path=getattr(args, "config", None))
+    version = _resolve("version", args.version, "EVERDO_VERSION", default="1.99.0", config_path=getattr(args, "config", None))
     if not host or not key:
         sys.exit(
             "error: host/key not configured. Run `./everdo_cli.py config set "
@@ -117,6 +129,7 @@ def main(argv=None) -> int:
     p.add_argument("--host")
     p.add_argument("--key")
     p.add_argument("--version", dest="version")
+    p.add_argument("--config", dest="config", help="path to config file (overrides auto-detection)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("time", help="server time")
@@ -206,23 +219,24 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
 
     # `config` is the only command that doesn't need a live client.
+    cfg_path = getattr(args, "config", None)
     if args.cmd == "config":
         if args.action == "show":
-            cfg = _load_config()
+            cfg = _load_config(cfg_path)
             key = cfg.get("key")
             masked = (key[:3] + "***" + key[-2:]) if key and len(key) > 5 else ("***" if key else None)
             shown = {**cfg, "key": masked} if "key" in cfg else cfg
-            print(f"config file: {CONFIG_PATH}")
+            print(f"config file: {_get_config_path(cfg_path)}")
             _print(shown)
         else:  # set
-            cfg = _load_config()
+            cfg = _load_config(cfg_path)
             for field, value in (("host", args.host), ("key", args.key), ("version", args.cfg_version)):
                 if value is not None:
                     cfg[field] = value
             if not cfg:
                 sys.exit("error: nothing to set; pass --host/--key/--version")
-            _save_config(cfg)
-            print(f"saved to {CONFIG_PATH}")
+            _save_config(cfg, cfg_path)
+            print(f"saved to {_get_config_path(cfg_path)}")
         return 0
 
     tasks = EverdoTasks(_client(args))

@@ -2,7 +2,7 @@
 
 Python client + CLI for a self-hosted [Everdo](https://everdo.net) server. Unlike the official `/api/items` endpoint (create-only), this client speaks the regular `/sync` protocol and can **read, mutate, and delete** existing items while remaining a regular client (not a master server).
 
-A persistent local cache (`everdo/.everdo_state.json`) keeps state warm across short-lived CLI invocations and dedups incidental reads within a single agent tick.
+A persistent local cache (`~/.config/everdo/state.json`, XDG-respecting) keeps state warm across short-lived CLI invocations and dedups incidental reads within a single agent tick.
 
 ## Requirements
 
@@ -45,4 +45,4 @@ tasks.complete(tid)
 ## Docs
 
 - [AGENTS.md](AGENTS.md) — full CLI reference for an agent or user driving Everdo.
-- [.agents/memory-bank/](.agents/memory-bank/) — architecture, sync protocol, tech stack, roadmap.
+- [.agent/memory-bank/](.agent/memory-bank/) — architecture, sync protocol, tech stack, roadmap.
