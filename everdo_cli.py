@@ -54,6 +54,12 @@ class ItemType(str, Enum):
     notebook = "notebook"
 
 
+class StatusName(str, Enum):
+    active = "active"
+    completed = "completed"
+    all = "all"
+
+
 _LIST_CODE = {
     "inbox": "i", "next": "a", "waiting": "w", "scheduled": "s",
     "someday": "m", "archived": "r", "trash": "d",
@@ -267,15 +273,28 @@ def item_list(
     list_: Annotated[Optional[ListName], typer.Option("--list", help="Filter by list.")] = None,
     type_: Annotated[Optional[ItemType], typer.Option("--type", help="Filter by type.")] = None,
     tag: Annotated[Optional[str], typer.Option("--tag", help="Filter by tag title.")] = None,
-    no_completed: Annotated[bool, typer.Option("--no-completed", help="Hide completed items.")] = False,
+    status: Annotated[Optional[StatusName], typer.Option("--status",
+                      help="active|completed|all. Default: active, "
+                           "or all when --list is archived/trash.")] = None,
 ) -> None:
-    """List items, optionally filtered by list/type/tag."""
+    """List items, optionally filtered by list/type/tag.
+
+    By default only active items are shown (not completed, not in
+    archive/trash) — mirroring the desktop client. Asking explicitly for the
+    archived or trash list shows everything there unless --status overrides it.
+    """
     t = _tasks()
+    if status is not None:
+        effective = status.value
+    elif list_ in (ListName.archived, ListName.trash):
+        effective = "all"
+    else:
+        effective = "active"
     items = t.find(
         list=_LIST_CODE[list_.value] if list_ else None,
         type=_TYPE_CODE[type_.value] if type_ else None,
         tag=tag,
-        include_completed=not no_completed,
+        status=effective,
     )
     _emit_items(items)
 
@@ -451,7 +470,7 @@ def tag_list() -> None:
 def project_list() -> None:
     """List open projects."""
     t = _tasks()
-    _emit_items(t.find_projects(include_completed=False))
+    _emit_items(t.find_projects(status="active"))
 
 
 @project_app.command("items")
@@ -469,7 +488,7 @@ def project_items(
 def notebook_list() -> None:
     """List notebooks."""
     t = _tasks()
-    _emit_items(t.find(type="l", include_completed=False))
+    _emit_items(t.find(type="l", status="active"))
 
 
 @notebook_app.command("items")

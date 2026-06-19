@@ -34,7 +34,9 @@ The surface is `everdo-cli <noun> <verb> [--params]`. Nouns: `item`, `tag`,
 `project`, `notebook`, `sync`, `config`.
 
 ```
-everdo-cli item list --no-completed
+everdo-cli item list                            # active items only (default)
+everdo-cli item list --status all               # include completed + archive/trash
+everdo-cli item list --list archived            # the archive (shows completed there)
 everdo-cli item find "milk"
 everdo-cli item create "Buy milk" --list inbox --note "2%"
 everdo-cli item set <ID> --list next            # move to Next

@@ -7,9 +7,11 @@ Two output modes: **compact** (the default — one line per item, only id/list/t
 Fast scan of what's there:
 
 ```
-everdo-cli item list                          # all items
-everdo-cli item list --list inbox --no-completed   # inbox, open only
-everdo-cli item list --type project           # all projects
+everdo-cli item list                          # active items (default: not completed, not archived/trash)
+everdo-cli item list --status all             # everything, incl. completed + archive/trash
+everdo-cli item list --status completed       # only completed items
+everdo-cli item list --list archived          # the archive (auto --status all unless overridden)
+everdo-cli item list --type project           # active projects
 everdo-cli item list --type notebook          # all notebooks
 everdo-cli item list --tag "<title>"          # items carrying a tag (incl. inherited)
 everdo-cli item find "<substring>"            # case-insensitive title search

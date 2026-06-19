@@ -36,6 +36,18 @@ LISTS = {
 }
 TYPES = {"action": "a", "project": "p", "note": "n", "list": "l"}
 
+# Lists that take an item out of circulation. An item in one of these is never
+# "active", regardless of its completion flag.
+ARCHIVE_LISTS = ("r", "d")
+# Status filter values for ``find``. "active" mirrors the desktop default:
+# not completed and not in archive/trash.
+STATUSES = ("active", "completed", "all")
+
+
+def is_active(item: dict[str, Any]) -> bool:
+    """True when an item is open and in a working list (not archived/trash)."""
+    return not item.get("completed_on") and item.get("list") not in ARCHIVE_LISTS
+
 # Fields that have a regular "<field>_ts" companion (set when the field changes).
 TS_FIELDS = {
     "title", "note", "type", "list", "is_focused", "completed_on", "due_date",
@@ -301,13 +313,18 @@ class EverdoTasks:
         list: str | None = None,
         type: str | None = None,
         tag: str | None = None,
-        include_completed: bool = True,
+        status: str = "all",
     ) -> list[dict[str, Any]]:
         """Filter items by title substring (case-insensitive), list, type and tag.
 
         ``tag`` matches against ``effective_tags`` (which includes tags
         inherited from a parent), case-insensitively on the tag title.
+
+        ``status`` selects a completion state: ``"active"`` (open and not in
+        archive/trash), ``"completed"`` (has ``completed_on``), or ``"all"``.
         """
+        if status not in STATUSES:
+            raise ValueError(f"status must be one of {STATUSES}, got {status!r}")
         self._refresh()
         tag_low = tag.lower() if tag else None
         out = []
@@ -323,7 +340,9 @@ class EverdoTasks:
                 titles = {(_tag_title(t) or "").lower() for t in effective}
                 if tag_low not in titles:
                     continue
-            if not include_completed and item.get("completed_on"):
+            if status == "active" and not is_active(item):
+                continue
+            if status == "completed" and not item.get("completed_on"):
                 continue
             out.append(item)
         return out
@@ -686,9 +705,9 @@ class EverdoTasks:
         return resp
 
     # --------------------------------------------------------------- projects
-    def find_projects(self, *, include_completed: bool = False) -> list[dict[str, Any]]:
-        """All items of type ``p``. Completed projects hidden by default."""
-        return self.find(type="p", include_completed=include_completed)
+    def find_projects(self, *, status: str = "active") -> list[dict[str, Any]]:
+        """All items of type ``p``. Archived/completed projects hidden by default."""
+        return self.find(type="p", status=status)
 
     def children_of(self, project_id: str | None) -> list[dict[str, Any]]:
         """Items whose ``parent_id`` matches. ``None`` means orphans."""

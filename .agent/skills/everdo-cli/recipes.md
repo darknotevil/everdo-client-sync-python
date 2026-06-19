@@ -3,7 +3,7 @@
 ## Triage the inbox (hot path)
 
 ```
-everdo-cli --json item list --list inbox --no-completed   # see what's there WITH notes
+everdo-cli --json item list --list inbox          # active items WITH notes (default hides completed)
 # Then batch-mutate. Use prefixes (first 4-6 hex of the id) to keep commands short:
 everdo-cli item trash AB12 CD34 EF56             # bulk soft delete
 everdo-cli item complete AB12 CD34               # bulk complete
