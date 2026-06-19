@@ -32,8 +32,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import typer  # noqa: E402
 import requests  # noqa: E402
 
-from everdo import EverdoClient, EverdoError, EverdoTasks  # noqa: E402
-from everdo import paths  # noqa: E402
+from everdo import EverdoError, EverdoTasks  # noqa: E402
+from everdo import config as everdo_config  # noqa: E402
 
 
 # --------------------------------------------------------------------- enums
@@ -71,61 +71,18 @@ state: dict = {"json": False, "host": None, "key": None, "version": None,
 
 
 # --------------------------------------------------------------- config I/O
-def _get_config_path(explicit_path=None) -> str:
-    if explicit_path:
-        return explicit_path
-    return str(paths.config_path())
-
-
-def _load_config(config_path=None) -> dict:
-    path = _get_config_path(config_path)
-    try:
-        with open(path, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-
-
-def _save_config(cfg: dict, config_path=None) -> None:
-    path = _get_config_path(config_path)
-    tmp = path + ".tmp"
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(cfg, fh, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
-
-
-def _resolve(name: str, cli_value, env_var: str, default=None, config_path=None):
-    """Priority: CLI flag > env var > config file > default."""
-    if cli_value:
-        return cli_value
-    env = os.environ.get(env_var)
-    if env:
-        return env
-    cfg = _load_config(config_path)
-    return cfg.get(name, default)
-
-
+# Config loading/saving and the flag>env>config>default precedence live in
+# everdo.config so the CLI and embedding programs share one implementation.
 def _tasks() -> EverdoTasks:
     """Build (once) and return the live EverdoTasks for server-backed commands."""
     if state["tasks"] is not None:
         return state["tasks"]
-    cfgp = state["config"]
-    host = _resolve("host", state["host"], "EVERDO_HOST", config_path=cfgp)
-    key = _resolve("key", state["key"], "EVERDO_KEY", config_path=cfgp)
-    version = _resolve("version", state["version"], "EVERDO_VERSION",
-                       default="1.99.0", config_path=cfgp)
-    if not host or not key:
-        raise EverdoError(
-            "host/key not configured. Run `everdo-cli config set "
-            "--host <ip:port> --key <API_KEY>`, or pass --host/--key, or set "
-            "EVERDO_HOST/EVERDO_KEY."
-        )
-    state["tasks"] = EverdoTasks(EverdoClient(host, key=key, version=version))
+    state["tasks"] = everdo_config.load_tasks(
+        host=state["host"],
+        key=state["key"],
+        version=state["version"],
+        config_path=state["config"],
+    )
     return state["tasks"]
 
 
@@ -544,14 +501,15 @@ def sync_status() -> None:
 @config_app.command("show")
 def config_show() -> None:
     """Show the persisted CLI config (key masked)."""
-    cfg = _load_config(state["config"])
+    cfg = everdo_config.load_config(state["config"])
     key = cfg.get("key")
     masked = (key[:3] + "***" + key[-2:]) if key and len(key) > 5 else ("***" if key else None)
     shown = {**cfg, "key": masked} if "key" in cfg else cfg
+    path = everdo_config.config_file(state["config"])
     if state["json"]:
-        _dump({"config_path": _get_config_path(state["config"]), **shown})
+        _dump({"config_path": path, **shown})
     else:
-        print(f"config file: {_get_config_path(state['config'])}")
+        print(f"config file: {path}")
         _dump(shown)
 
 
@@ -564,13 +522,12 @@ def config_set(
     """Persist host/key/version to the config file."""
     if host is None and key is None and version is None:
         raise EverdoError("nothing to set; pass --host/--key/--version")
-    cfg = _load_config(state["config"])
+    cfg = everdo_config.load_config(state["config"])
     for field, value in (("host", host), ("key", key), ("version", version)):
         if value is not None:
             cfg[field] = value
-    _save_config(cfg, state["config"])
-    _emit_msg(f"saved to {_get_config_path(state['config'])}",
-              {"saved_to": _get_config_path(state["config"])})
+    saved_to = everdo_config.save_config(cfg, state["config"])
+    _emit_msg(f"saved to {saved_to}", {"saved_to": saved_to})
 
 
 # --------------------------------------------------------------------- main

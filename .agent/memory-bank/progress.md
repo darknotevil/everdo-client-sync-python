@@ -8,8 +8,9 @@
 - ID-prefix resolver (4+ hex) for short batch commands at the CLI layer.
 - Fail-fast batch resolution — a typo or ambiguous prefix aborts the batch *before* any mutation runs.
 - Project / notebook semantics: `item set --parent <pid>` with auto-promote out of Inbox/Trash/Archived (`list ∈ {i,d,r}`) so newly attached items render in the project view.
-- Tag helpers: `resolve_tag(name)` (catalogue lookup by title), `add_tags`/`remove_tags`/`set_tags_by_name` (CLI `item tag add/remove/set`), and `item list --tag` filtering on `effective_tags`.
+- Tag helpers: `resolve_tag(name)` (catalogue lookup by title), `ensure_tag(title, *, type, color)` (opt-in creation through `changes.tags`), `add_tags`/`remove_tags`/`set_tags_by_name` (CLI `item tag add/remove/set`), and `item list --tag` filtering on `effective_tags`. Lookup helpers stay strict (raise on unknown title); only `ensure_tag` mints a tag.
 - `sync status` (server time + clock drift + last sync + cache size), full backup dump (`/pull` → file).
+- Config factory in `everdo.config` — single source of truth for the `flag > env (EVERDO_*) > config-file > default` precedence: `load_config`/`save_config` (0600, atomic), `resolve_setting`/`resolve_credentials`, and `load_tasks(...)` / `EverdoTasks.from_config(...)` (extra kwargs flow to `EverdoClient`). `MissingConfigError` (an `EverdoError`) when host/key absent. `everdo_cli.py` and embedding programs (classifier) both build their `EverdoTasks` through it instead of duplicating loader logic.
 
 ## Intentionally NOT implemented
 

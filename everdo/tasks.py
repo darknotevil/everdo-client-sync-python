@@ -86,6 +86,17 @@ class EverdoTasks:
         self._tags: dict[str, dict[str, Any]] | None = None
         self._last_refresh: float = 0.0
 
+    @classmethod
+    def from_config(cls, **kwargs: Any) -> "EverdoTasks":
+        """Build from resolved config (``flag > env > config file > default``).
+
+        Thin alias for :func:`everdo.config.load_tasks`; see it for the full
+        keyword set (``host``/``key``/``version``/``config_path``/…).
+        """
+        from .config import load_tasks
+
+        return load_tasks(**kwargs)
+
     # --------------------------------------------------------- cache plumbing
     def _load_cache(self) -> None:
         state = self.client._load_state()
