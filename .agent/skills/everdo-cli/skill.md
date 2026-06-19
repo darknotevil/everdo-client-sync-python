@@ -21,7 +21,13 @@ The surface is **`everdo-cli <noun> <verb> [--params]`**. Nouns:
 | `sync` | `refresh` / `changes` / `backup` / `status` (server + cache plumbing) |
 | `config` | `show` / `set` persisted CLI config |
 
-A global **`--json`** placed **before the noun** (`everdo-cli --json item list`) switches every command to machine-readable JSON, including a `{"error": ...}` envelope on stderr. `--help` works on every noun and verb.
+A global **`--json`** switches every command to machine-readable JSON, including a `{"error": ...}` envelope on stderr. `--help` works on every noun and verb.
+
+> ⚠️ **`--json` goes BEFORE the noun, never at the end.** It is a global flag on the root, not on the subcommand, so it must precede `item`/`project`/etc. — exactly like `git --no-pager log`.
+> ```
+> everdo-cli --json item list --status active     # ✅ correct
+> everdo-cli item list --status active --json      # ❌ "No such option: --json"
+> ```
 
 For setup and config precedence, see the root [AGENTS.md](../../../AGENTS.md).
 

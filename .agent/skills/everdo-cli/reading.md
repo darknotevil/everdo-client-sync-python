@@ -27,7 +27,7 @@ everdo-cli tag list                           # the tag catalogue
 
 ## JSON
 
-Use whenever you need fields beyond the title (notes, due dates, deduplication, machine parsing, etc.). Put `--json` before the noun:
+Use whenever you need fields beyond the title (notes, due dates, deduplication, machine parsing, etc.). **`--json` is a global flag — put it BEFORE the noun, never at the end of the line** (`everdo-cli item list ... --json` fails with "No such option: --json"):
 
 ```
 everdo-cli --json item list --list inbox      # full items in inbox

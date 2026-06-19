@@ -11,6 +11,7 @@
 - `BLOCKED` / "user denied this command" — the user has not approved the action. **Stop.** Tell the user exactly which command on which item you were about to run, and ask for confirmation. Do not retry the same command and do not paraphrase it into a different one.
 - `HTTP 400/401/...` — almost always config or network. Check `everdo-cli config show` and `everdo-cli sync status`. If `sync status` works, config is fine and the request body is the problem (likely an item field the server doesn't like).
 - The command printed nothing — the cache may be empty. `everdo-cli sync refresh` forces a fresh pull.
+- `Error: No such option: --json` (or `--help`/host/key at the end) — these are **global** flags on the root and must come **before** the noun, not trailing the subcommand. Use `everdo-cli --json item list ...`, not `everdo-cli item list ... --json`.
 
 In `--json` mode (global flag before the noun) every error is also emitted as `{"error": "..."}` on stderr, so it can be parsed instead of scraped.
 
