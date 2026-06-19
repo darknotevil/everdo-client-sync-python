@@ -17,5 +17,5 @@
 
 ## TODO / ideas
 
-- **Tag creation.** `resolve_tag(name)` (lookup) and the add/remove/set helpers exist; what is still missing is `create_tag(name, color=...) -> tag_obj` — writing through `changes.tags` on `/sync` so the CLI could mint a new tag instead of erroring on an unknown title.
+- ~~**Tag creation.**~~ Done: `ensure_tag(title, *, type="a", color=0xCCCCCC) -> tag_obj` writes through `changes.tags` on `/sync` (mirrors `create()`: sync → `_apply` → `_post_mutation`). It is the *only* tag-minting entry point and is opt-in by design — `resolve_tag`/`add_tags` stay strict and still raise on unknown titles so a typo never mints a junk tag. Verified live (create, server persistence, color round-trip, idempotency).
 - **Smarter conflict diagnostics.** When a mutation returns with a different `changed_ts` than expected (someone else edited the item between our read and write), the library currently overwrites silently. Could detect and surface a warning.

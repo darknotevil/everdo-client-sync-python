@@ -405,6 +405,35 @@ class EverdoTasks:
                 return tg
         raise EverdoError(f"unknown tag {name!r}; create it in Everdo first")
 
+    def ensure_tag(
+        self, title: str, *, type: str = "a", color: int = 0xCCCCCC
+    ) -> dict[str, Any]:
+        """Return the tag named ``title``, creating it on the server if absent.
+
+        Unlike :meth:`resolve_tag` (which refuses unknown names), this is an
+        explicit opt-in to tag creation. Callers that want strict lookup keep
+        using ``resolve_tag``/``add_tags`` so a typo never mints a junk tag.
+        """
+        try:
+            return self.resolve_tag(title)
+        except EverdoError:
+            pass
+        ts = _now()
+        tag = {
+            "id": new_sync_id(),
+            "changed_ts": ts,
+            "changed_properties": ["title", "type", "color"],
+            "title": title, "title_ts": ts,
+            "type": type, "type_ts": ts,
+            "color": color, "color_ts": ts,
+        }
+        resp = self.client.sync({"tags": [tag]})
+        # Mirror create(): the server may not echo our own write back, so merge
+        # it locally before reconciling with the response.
+        self._apply(None, [tag], None)
+        self._post_mutation(resp)
+        return self.resolve_tag(title)
+
     def add_tags(self, item_id: str, names: list[str]) -> dict[str, Any]:
         """Add tags to an item's own tag list (idempotent, never clobbers)."""
         current = list((self.get(item_id) or {}).get("tags") or [])
