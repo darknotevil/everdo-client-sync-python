@@ -1,39 +1,47 @@
 # Reading
 
-Two output modes: **compact** (one line per item, only id/list/type/title) and **JSON** (full item with all fields including `note`, `due_date`, `parent_id`, `tags`, `completed_on`, `created_on`, ...).
+Two output modes: **compact** (the default — one line per item, only id/list/type/title) and **JSON** (full item with all fields including `note`, `due_date`, `parent_id`, `tags`, `effective_tags`, `completed_on`, `created_on`, ...). JSON is enabled by the global `--json` flag, which goes **before the noun**.
 
 ## Compact
 
 Fast scan of what's there:
 
 ```
-./everdo_cli.py list                           # all items
-./everdo_cli.py list --list i --no-completed   # inbox, open only
-./everdo_cli.py list --type p                  # all projects
-./everdo_cli.py list --type l                  # all notebooks
-./everdo_cli.py find "<substring>"             # case-insensitive title search
-./everdo_cli.py projects                       # open projects (alias for list --type p)
-./everdo_cli.py children <PROJECT_OR_NOTEBOOK_ID>   # items whose parent_id == that
-./everdo_cli.py children none                  # orphans (no parent)
+everdo-cli item list                          # all items
+everdo-cli item list --list inbox --no-completed   # inbox, open only
+everdo-cli item list --type project           # all projects
+everdo-cli item list --type notebook          # all notebooks
+everdo-cli item list --tag "<title>"          # items carrying a tag (incl. inherited)
+everdo-cli item find "<substring>"            # case-insensitive title search
+everdo-cli project list                       # open projects
+everdo-cli project items <PROJECT_ID>         # items whose parent_id == that project
+everdo-cli project items none                 # orphans (no parent)
+everdo-cli notebook list                      # notebooks
+everdo-cli notebook items <NOTEBOOK_ID>       # notes in that notebook
+everdo-cli tag list                           # the tag catalogue
 ```
+
+`item get <ID>` prints one item as a readable field block (id, title, type, list, parent, due, tags, note).
 
 ## JSON
 
-Use whenever you need fields beyond the title (notes, due dates, deduplication, filtering by tag, etc.):
+Use whenever you need fields beyond the title (notes, due dates, deduplication, machine parsing, etc.). Put `--json` before the noun:
 
 ```
-./everdo_cli.py list --list i --json           # full items in inbox
-./everdo_cli.py list --type p --json           # full projects
-./everdo_cli.py find "<substring>" --json      # full matches
-./everdo_cli.py get <ID>                       # one item, always JSON
+everdo-cli --json item list --list inbox      # full items in inbox
+everdo-cli --json item list --type project    # full projects
+everdo-cli --json item find "<substring>"     # full matches
+everdo-cli --json item get <ID>               # one full item
 ```
 
-**Rule of thumb:** if you would need to call `get` more than once after a `list`, you wanted `list --json` instead — it returns the same fields for every item in a single call.
+In `--json` mode every command — reads, mutations, and even errors (`{"error": ...}` on stderr) — emits JSON, so it is the channel to use when parsing output programmatically.
 
-## Server time
+**Rule of thumb:** if you would need to call `item get` more than once after a `list`, you wanted `--json item list` instead — it returns the same fields for every item in a single call.
+
+## Connectivity / status
 
 ```
-./everdo_cli.py time                           # server time (ms)
+everdo-cli sync status                        # server time, clock drift, last sync, cache size
 ```
 
-Also useful as a connectivity / auth check — if `time` works, config and network are fine.
+Also the quickest connectivity / auth check — if `sync status` works, config and network are fine.

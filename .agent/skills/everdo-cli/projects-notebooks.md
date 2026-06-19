@@ -1,30 +1,42 @@
 # Projects & notebooks
 
+A project (type `project`) contains actions; a notebook (type `notebook`) contains notes. Both use the **same** `parent_id` field, so the same commands handle both.
+
+## Read
+
 ```
-./everdo_cli.py assign --to <PROJECT_OR_NOTEBOOK_ID> <ITEM_ID> [<ITEM_ID>...]   # attach (batch)
-./everdo_cli.py assign --to none                     <ITEM_ID> [<ITEM_ID>...]   # detach (batch)
+everdo-cli project list                     # open projects
+everdo-cli project items <PROJECT_ID>       # items attached to a project
+everdo-cli notebook list                    # notebooks
+everdo-cli notebook items <NOTEBOOK_ID>     # notes attached to a notebook
+everdo-cli project items none               # orphans (no parent)
 ```
 
-`assign` is the right command for putting an action under a project AND for putting a note under a notebook (`parent_id` is the same field for both).
+## Attach / detach
+
+`parent_id` is changed with `item set --parent`. It is single-id; to attach several items, loop:
+
+```
+everdo-cli item set <ITEM_ID> --parent <PROJECT_OR_NOTEBOOK_ID>   # attach
+everdo-cli item set <ITEM_ID> --parent none                       # detach
+for id in AB12 CD34 EF56; do everdo-cli item set "$id" --parent <PROJECT_ID>; done
+```
 
 ## Auto-promote rule
 
 Items in Inbox, Trash, or Archived (`list ∈ {i, d, r}`) do **NOT** render in project/notebook views even if `parent_id` is set.
 
-`assign` auto-promotes such items to Next (`list='a'`); you don't have to do that yourself. If you need a different target list (e.g., Waiting):
+`item set --parent` auto-promotes such items to Next (`list=next`); you don't have to do that yourself. To pick a different target list in the same call, pass `--list` alongside `--parent`:
 
 ```
-./everdo_cli.py assign --to <PROJECT_ID> <ID>
-./everdo_cli.py move   --to waiting      <ID>
+everdo-cli item set <ID> --parent <PROJECT_ID> --list waiting
 ```
 
 Or use the library API: `move_to_project(id, pid, list='w')`.
 
-## move vs assign
+## list vs parent — don't confuse them
 
-These are different operations — don't confuse them.
+- `--list` changes **where it lives** (Inbox / Next / Waiting / ...).
+- `--parent` changes **which project/notebook contains it**.
 
-- `move` changes the **list** field only (where it lives: Inbox / Next / Waiting / ...).
-- `assign` changes the **parent_id** field (which project/notebook contains it).
-
-To put something into a project, you need `assign`, not `move`.
+To put something *into* a project you need `--parent`, not `--list`.

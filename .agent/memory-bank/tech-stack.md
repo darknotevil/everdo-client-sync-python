@@ -3,7 +3,8 @@
 ## Runtime
 
 - **Python 3.10+** (PEP 604 unions, `from __future__ import annotations`).
-- **`requests`** — the only mandatory third-party dep.
+- **`requests`** — HTTP transport to the `/sync` API.
+- **`typer`** — the CLI framework (`noun verb --params`, `--json`, `--help`). Vendors its own CLI engine; `click` is no longer a separate dependency.
 - **`urllib3`** — comes in via `requests`; touched directly only to silence `InsecureRequestWarning` (self-signed cert).
 
 ## Target server

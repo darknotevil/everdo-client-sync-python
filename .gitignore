@@ -10,3 +10,7 @@ __pycache__/
 # macOS cruft
 .DS_Store
 ._*
+
+
+.venv
+uv.lock

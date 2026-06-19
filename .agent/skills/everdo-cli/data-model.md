@@ -1,15 +1,15 @@
 # Data model
 
-Three concepts cover everything the CLI does: **list** (where an item lives), **type** (what it is), and **parent_id** (what it belongs to).
+Everything the CLI touches is an **item**. Four concepts describe it: **type** (what it is), **list** (where it lives), **parent_id** (what it belongs to), and **tags** (cross-cutting labels). Actions, projects, notes and notebooks are all items — they differ only by `type`, which is why a single `item` noun handles them all.
 
 ## list
 
-Where the item lives. Single-letter code on the wire; friendly names accepted by `move`:
+Where the item lives. Single-letter code on the wire; the CLI accepts the friendly name everywhere a list is taken (`item set --list`, `item create --list`, `item list --list`):
 
 | code | friendly  | meaning              |
 |------|-----------|----------------------|
 | `i`  | inbox     | Inbox                |
-| `a`  | next / active | Next                 |
+| `a`  | next      | Next                 |
 | `s`  | scheduled | Scheduled            |
 | `w`  | waiting   | Waiting              |
 | `m`  | someday   | Someday              |
@@ -18,18 +18,24 @@ Where the item lives. Single-letter code on the wire; friendly names accepted by
 
 ## type
 
-| code | meaning                                  |
-|------|------------------------------------------|
-| `a`  | action (default)                         |
-| `p`  | project (container for actions)          |
-| `n`  | note (lives in a notebook)               |
-| `l`  | notebook (container for notes)           |
+The CLI takes the friendly name (`item create --type`, `item set --type`, `item list --type`):
 
-Only these four are valid type codes.
+| friendly | code | meaning                                  |
+|----------|------|------------------------------------------|
+| action   | `a`  | action (default)                         |
+| project  | `p`  | project (container for actions)          |
+| note     | `n`  | note (lives in a notebook)               |
+| notebook | `l`  | notebook (container for notes)           |
+
+Only these four types exist.
 
 ## parent_id
 
-Links an item to its parent — an action to a project, or a note to a notebook. Same field for both. Set it with `assign`, never by hand-editing.
+Links an item to its parent — an action to a project, or a note to a notebook. Same field for both. Set it with `item set --parent <ID>` (or `--parent none` to detach), never by hand-editing.
+
+## tags
+
+Tags are separate entities owned by the server (`{id, title, type}`), referenced by **title**. They are cross-cutting — independent of list/type/parent. The catalogue is read-only from the CLI (`tag list`); you attach/detach them per item with `item tag add/remove/set` and filter with `item list --tag <title>`. An unknown title is an error — create the tag in Everdo first; the CLI never auto-creates tags. See [mutating.md](mutating.md).
 
 ## IDs: prefixes accepted everywhere
 
@@ -43,7 +49,7 @@ Wherever the CLI takes an item id (`<ID>`), you may pass a **prefix of 4+ hex ch
 This shortens batch commands a lot:
 
 ```
-./everdo_cli.py trash AB12 CD34 EF56
+everdo-cli item trash AB12 CD34 EF56
 ```
 
 The first 6–8 hex chars are almost always unique.

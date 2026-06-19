@@ -6,9 +6,9 @@
 |--------------------|----------------|
 | `everdo/client.py` | Low-level transport: HTTP wrapper around `/pull`, `/sync`, `/time`. Persists `last_sync_ts` between runs. |
 | `everdo/tasks.py`  | High-level item operations. Holds the in-memory cache of items/tags; resolves reads from cache; applies LWW; bumps `*_ts` on writes. |
-| `everdo_cli.py`    | Thin `argparse` front-end to `EverdoTasks`. ID-prefix resolution lives here, not in the library. |
+| `everdo_cli.py`    | `typer` `noun verb --params` front-end to `EverdoTasks`. ID-prefix resolution, friendly list/type enums, and global `--json` output (incl. structured errors) live here, not in the library. |
 
-Dependencies: `everdo_cli` → `everdo.tasks` + `everdo.client`; `everdo.tasks` → `everdo.client`; `everdo.client` → `requests` (+ `urllib3` for the silence-warning import).
+Dependencies: `everdo_cli` → `typer` + `everdo.tasks` + `everdo.client`; `everdo.tasks` → `everdo.client`; `everdo.client` → `requests` (+ `urllib3` for the silence-warning import).
 
 ## Cache layer (EverdoTasks)
 

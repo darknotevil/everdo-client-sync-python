@@ -53,6 +53,13 @@ def _now() -> int:
     return int(time.time())
 
 
+def _tag_title(tag: Any) -> str | None:
+    """Extract a tag's title whether it is stored as a dict or a bare string."""
+    if isinstance(tag, dict):
+        return tag.get("title")
+    return tag if isinstance(tag, str) else None
+
+
 def new_sync_id() -> str:
     return uuid.uuid4().hex.upper()
 
@@ -216,10 +223,16 @@ class EverdoTasks:
         *,
         list: str | None = None,
         type: str | None = None,
+        tag: str | None = None,
         include_completed: bool = True,
     ) -> list[dict[str, Any]]:
-        """Filter items by title substring (case-insensitive), list and type."""
+        """Filter items by title substring (case-insensitive), list, type and tag.
+
+        ``tag`` matches against ``effective_tags`` (which includes tags
+        inherited from a parent), case-insensitively on the tag title.
+        """
         self._refresh()
+        tag_low = tag.lower() if tag else None
         out = []
         for item in (self._items or {}).values():
             if text and text.lower() not in (item.get("title") or "").lower():
@@ -228,6 +241,11 @@ class EverdoTasks:
                 continue
             if type is not None and item.get("type") != type:
                 continue
+            if tag_low is not None:
+                effective = item.get("effective_tags") or item.get("tags") or []
+                titles = {(_tag_title(t) or "").lower() for t in effective}
+                if tag_low not in titles:
+                    continue
             if not include_completed and item.get("completed_on"):
                 continue
             out.append(item)
@@ -372,6 +390,43 @@ class EverdoTasks:
     def set_tags(self, item_id: str, tags: list[dict]) -> dict[str, Any]:
         return self.update(item_id, tags=tags)
 
+    # ---- tag helpers (name-based, resolved against the catalog) ----------
+    def resolve_tag(self, name: str) -> dict[str, Any]:
+        """Look a tag up by title (case-insensitive) in the synced catalog.
+
+        Tags are entities owned by the server; this CLI does not create them.
+        An unknown name is an error rather than a silent no-op so a typo never
+        ends up as a brand-new tag.
+        """
+        self._refresh()
+        low = (name or "").lower()
+        for tg in (self._tags or {}).values():
+            if (tg.get("title") or "").lower() == low:
+                return tg
+        raise EverdoError(f"unknown tag {name!r}; create it in Everdo first")
+
+    def add_tags(self, item_id: str, names: list[str]) -> dict[str, Any]:
+        """Add tags to an item's own tag list (idempotent, never clobbers)."""
+        current = list((self.get(item_id) or {}).get("tags") or [])
+        have = {t.get("id") for t in current if isinstance(t, dict)}
+        for name in names:
+            tg = self.resolve_tag(name)
+            if tg.get("id") not in have:
+                current.append(tg)
+                have.add(tg.get("id"))
+        return self.set_tags(item_id, current)
+
+    def remove_tags(self, item_id: str, names: list[str]) -> dict[str, Any]:
+        """Remove the named tags from an item's own tag list."""
+        current = list((self.get(item_id) or {}).get("tags") or [])
+        drop = {(n or "").lower() for n in names}
+        kept = [t for t in current if (_tag_title(t) or "").lower() not in drop]
+        return self.set_tags(item_id, kept)
+
+    def set_tags_by_name(self, item_id: str, names: list[str]) -> dict[str, Any]:
+        """Replace an item's own tag list with exactly the named tags."""
+        return self.set_tags(item_id, [self.resolve_tag(n) for n in names])
+
     def delete(self, item_id: str) -> dict[str, Any]:
         """Delete an item via the deletions channel."""
         deletion = {"sync_id": item_id, "entity_type": "i", "ts": _now()}
@@ -426,3 +481,22 @@ class EverdoTasks:
     def pull_changes(self) -> dict[str, Any]:
         """Force an incremental refresh; return the delta that was applied."""
         return self._refresh(force=True)
+
+    def status(self) -> dict[str, Any]:
+        """Snapshot of connectivity and cache health for diagnostics.
+
+        Reports server vs. local clock (a large ``drift_ms`` hints at clock
+        skew), the last confirmed sync timestamp, and how much is cached.
+        """
+        server_ms = self.client.server_time_ms()
+        local_ms = int(time.time() * 1000)
+        self._refresh()
+        return {
+            "server_time_ms": server_ms,
+            "local_time_ms": local_ms,
+            "drift_ms": server_ms - local_ms,
+            "last_sync_ts": self.client.last_sync_ts,
+            "items_cached": len(self._items or {}),
+            "tags_cached": len(self._tags or {}),
+            "state_path": self.client.state_path,
+        }

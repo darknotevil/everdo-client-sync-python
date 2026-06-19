@@ -4,11 +4,19 @@ Python client + CLI for a self-hosted Everdo server. Uses the `/sync` protocol (
 
 ## Setup
 
-- Python 3.10+, `requests`.
+- Python 3.10+, `requests`, `typer`.
+- Install once (puts `everdo-cli` on `$PATH`):
+
+  ```
+  uv tool install .
+  ```
+
+  Without an install, the CLI is also reachable as `./everdo_cli.py` from the repo root — every example in this guide works identically with either form.
+
 - One-time config:
 
   ```
-  ./everdo_cli.py config set --host <ip:port> --key <API_KEY>
+  everdo-cli config set --host <ip:port> --key <API_KEY>
   ```
 
   After this, no flags or env vars are needed. Precedence: `--flag` > env (`EVERDO_HOST` / `EVERDO_KEY` / `EVERDO_VERSION`) > config file.

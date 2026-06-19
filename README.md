@@ -6,29 +6,43 @@ A persistent local cache (`~/.config/everdo/state.json`, XDG-respecting) keeps s
 
 ## Requirements
 
-- Python 3.10+ with `requests`
+- Python 3.10+ with `requests` and `typer`
 - Everdo `>= v1.0.6-3` in Server mode (Settings → Sync → Server → API)
 
 ## Setup
 
+Install the CLI (puts `everdo-cli` on your `$PATH`):
+
 ```
-./everdo_cli.py config set --host <HOST:PORT> --key <API_KEY>
-./everdo_cli.py config show          # key is masked
+uv tool install .
+```
+
+Then configure host/key:
+
+```
+everdo-cli config set --host <HOST:PORT> --key <API_KEY>
+everdo-cli config show          # key is masked
 ```
 
 Precedence: `--flag` > env (`EVERDO_HOST` / `EVERDO_KEY` / `EVERDO_VERSION`) > config file.
 
+> Without an install, the same CLI is reachable as `./everdo_cli.py` from the repo root — every example below works identically with either form.
+
 ## CLI quick-start
 
+The surface is `everdo-cli <noun> <verb> [--params]`. Nouns: `item`, `tag`,
+`project`, `notebook`, `sync`, `config`.
+
 ```
-./everdo_cli.py list --no-completed
-./everdo_cli.py find "milk"
-./everdo_cli.py create "Buy milk" --list i --note "2%"
-./everdo_cli.py move --to next <ID>
-./everdo_cli.py complete <ID>
+everdo-cli item list --no-completed
+everdo-cli item find "milk"
+everdo-cli item create "Buy milk" --list inbox --note "2%"
+everdo-cli item set <ID> --list next            # move to Next
+everdo-cli item complete <ID>
+everdo-cli --json item list --list inbox        # JSON output (flag goes before the noun)
 ```
 
-IDs accept 4+ hex-character prefixes.
+IDs accept 4+ hex-character prefixes. `--help` works on every noun and verb.
 
 ## Library quick-start
 

@@ -5,47 +5,60 @@ See [data-model.md](data-model.md) for the ID-prefix mechanic — every `<ID>` b
 ## Create
 
 ```
-./everdo_cli.py create "Buy milk"                              # action in inbox
-./everdo_cli.py create "Buy milk" --note "2%" --list a         # in Next
-./everdo_cli.py create "Project X" --type p --list a           # a project
-./everdo_cli.py create "My notebook" --type l --list a         # a notebook
-./everdo_cli.py create "note body" --type n --parent <NOTEBOOK_ID> --list a
-./everdo_cli.py create "subtask" --parent <PROJECT_ID> --list a
+everdo-cli item create "Buy milk"                              # action in inbox
+everdo-cli item create "Buy milk" --note "2%" --list next      # in Next
+everdo-cli item create "Project X" --type project --list next  # a project
+everdo-cli item create "My notebook" --type notebook --list next
+everdo-cli item create "note body" --type note --parent <NOTEBOOK_ID> --list next
+everdo-cli item create "subtask" --parent <PROJECT_ID> --list next
+everdo-cli item create "Pay rent" --tag finance --tag urgent   # with tags (must exist)
 ```
 
-Prints the new item's id on stdout — capture it for follow-up commands.
+Prints the new item's id on stdout — capture it for follow-up commands (full item with `--json`).
 
-## Batch verbs (no target)
+## Change fields — `item set`
+
+One verb sets any combination of fields on a single item (it maps to one whole-item update, so several flags in one call is the efficient way):
+
+```
+everdo-cli item set <ID> --title "new title"
+everdo-cli item set <ID> --note  "new note body"
+everdo-cli item set <ID> --due   1735680000        # unix seconds, or 'none' to clear
+everdo-cli item set <ID> --list  next              # move to a list (friendly name or raw code)
+everdo-cli item set <ID> --type  project           # convert type (action/project/note/notebook)
+everdo-cli item set <ID> --parent <PROJECT_ID>     # attach to a project/notebook
+everdo-cli item set <ID> --parent none             # detach
+everdo-cli item set <ID> --title "X" --list next --due none   # several fields at once
+```
+
+`--parent` follows the inbox→Next auto-promote rule — see [projects-notebooks.md](projects-notebooks.md).
+
+`item set` is single-id (the values are per-item). The lifecycle verbs below are batch.
+
+## Batch lifecycle verbs
 
 Take 1..N ids:
 
 ```
-./everdo_cli.py complete   <ID> [<ID>...]        # mark done
-./everdo_cli.py uncomplete <ID> [<ID>...]
-./everdo_cli.py focus      <ID> [<ID>...]        # star
-./everdo_cli.py unfocus    <ID> [<ID>...]
-./everdo_cli.py trash      <ID> [<ID>...]        # soft delete (to Trash; reversible)
-./everdo_cli.py delete     <ID> [<ID>...] --permanent  # hard delete + tombstone (irreversible)
+everdo-cli item complete   <ID> [<ID>...]        # mark done
+everdo-cli item uncomplete <ID> [<ID>...]
+everdo-cli item focus      <ID> [<ID>...]        # star
+everdo-cli item unfocus    <ID> [<ID>...]
+everdo-cli item trash      <ID> [<ID>...]        # soft delete (to Trash; reversible)
+everdo-cli item delete     <ID> [<ID>...] --permanent  # hard delete + tombstone (irreversible)
 ```
 
-## Batch verbs with target (`--to`)
+## Tags on an item
+
+Tags are referenced by **title** and must already exist in the catalogue (`tag list`); an unknown title is an error. `add`/`remove` are additive/subtractive and never clobber tags you didn't name — prefer them. `set` replaces the whole list:
 
 ```
-./everdo_cli.py move    --to <list>       <ID> [<ID>...]   # list = inbox/next/waiting/scheduled/someday/archived/trash or raw code
-./everdo_cli.py convert --to <type>       <ID> [<ID>...]   # type = a/p/n/l
-./everdo_cli.py assign  --to <PROJECT_ID> <ID> [<ID>...]   # attach to project/notebook
-./everdo_cli.py assign  --to none         <ID> [<ID>...]   # detach
+everdo-cli item tag add    <ID> finance urgent   # add one or more (idempotent)
+everdo-cli item tag remove <ID> urgent           # remove one or more
+everdo-cli item tag set    <ID> finance          # replace tags with exactly these
 ```
 
-## Single-id verbs
-
-The second argument is per-item, so batching doesn't make sense:
-
-```
-./everdo_cli.py rename <ID> "new title"
-./everdo_cli.py note   <ID> "new note body"
-./everdo_cli.py due    <ID> 1735680000           # unix seconds, or 'none'
-```
+Filter by tag with `everdo-cli item list --tag finance` (matches inherited tags too).
 
 ## Fail-fast batch resolution
 
