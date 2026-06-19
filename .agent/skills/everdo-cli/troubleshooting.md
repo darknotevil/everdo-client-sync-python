@@ -6,7 +6,7 @@
 - `error: ambiguous id prefix '<X>': ...` — your prefix matches >1 item. The error lists the candidates; pass a longer prefix.
 - `error: id prefix '<X>' too short` — minimum length is 4 hex characters.
 - `error: item not found: <ID>` — same as above but raised from inside a mutation; usually means the cache was repopulated and your id is gone.
-- `error: unknown tag '<X>'; create it in Everdo first` — tags are referenced by title and must already exist. Run `everdo-cli tag list` to see the exact titles; the CLI never auto-creates tags.
+- `error: unknown tag '<X>'; create it in Everdo first` — tags are referenced by title and must already exist. Run `everdo-cli tag list` to see the exact titles; the CLI never auto-creates tags (a typo must not mint one). Programmatic callers that *want* to create a tag use the library's `tasks.ensure_tag(title)`.
 - `error: cannot reach Everdo server: ...` — network/host problem. Check the server is up and `everdo-cli config show` points at it.
 - `BLOCKED` / "user denied this command" — the user has not approved the action. **Stop.** Tell the user exactly which command on which item you were about to run, and ask for confirmation. Do not retry the same command and do not paraphrase it into a different one.
 - `HTTP 400/401/...` — almost always config or network. Check `everdo-cli config show` and `everdo-cli sync status`. If `sync status` works, config is fine and the request body is the problem (likely an item field the server doesn't like).

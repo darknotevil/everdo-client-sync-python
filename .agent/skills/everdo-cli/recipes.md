@@ -39,3 +39,15 @@ everdo-cli tag list                              # find the exact tag title firs
 for id in AB12 CD34; do everdo-cli item tag add "$id" finance; done
 everdo-cli item list --tag finance               # verify
 ```
+
+## Sweep a machine-written tag family out of the database
+
+When a generator (e.g. a classifier) has scattered `~suggest/*` tags, remove the
+whole family in one round-trip instead of looping per item:
+
+```
+everdo-cli item tag remove --match '~suggest/*'        # all items, one /sync
+everdo-cli --json item list --tag '~suggest/proj=x'    # verify nothing matches
+```
+
+Programmatic callers get the same in one call: `tasks.remove_tags_matching("~suggest/*")`.

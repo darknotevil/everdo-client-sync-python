@@ -5,6 +5,7 @@
 - Full CRUD on items via `/sync`: create, mutate (list/type/parent/title/note/due/focus/complete), trash (soft delete), delete (permanent + tombstone).
 - Typer-based `noun verb --params` CLI (`item` / `tag` / `project` / `notebook` / `sync` / `config`); field setters collapsed into a single `item set`; global `--json` with structured `{"error": ...}` output. The library API keeps the granular wrappers (`rename`/`move`/`convert`/...) for programmatic callers.
 - Persistent local cache with incremental `/sync` deltas, TTL-deduped reads, mutation-forced refresh.
+- Batch mutations in one round-trip: `update_many({id: {field: value}})` (core; `update` now delegates to it), plus tag-batch helpers `set_tags_many` / `add_tags_many` / `remove_tags_many` / `remove_tags_matching(glob, item_ids=None)`. Cost is **2 `/sync` calls total** (one forced refresh + one mutation) regardless of N, vs `update`'s 2 per item — the fix for mass tag housekeeping that previously did 2N serial round-trips (can't parallelise: shared `state.json`). CLI: `item tag remove --match '<glob>' [<id>...]` (default scope = all items) on top of `remove_tags_matching`; the explicit `item tag remove <id> <tag>...` form is unchanged.
 - ID-prefix resolver (4+ hex) for short batch commands at the CLI layer.
 - Fail-fast batch resolution — a typo or ambiguous prefix aborts the batch *before* any mutation runs.
 - Project / notebook semantics: `item set --parent <pid>` with auto-promote out of Inbox/Trash/Archived (`list ∈ {i,d,r}`) so newly attached items render in the project view.

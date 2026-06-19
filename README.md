@@ -46,14 +46,35 @@ IDs accept 4+ hex-character prefixes. `--help` works on every noun and verb.
 
 ## Library quick-start
 
-```python
-from everdo import EverdoClient, EverdoTasks
+`EverdoTasks.from_config()` builds the client from the same `flag > env > config-file > default`
+precedence the CLI uses, so an embedding program needs no connection boilerplate (pass
+`host=`/`key=`/`config_path=` to override). Build the transport by hand only if you want to:
 
-tasks = EverdoTasks(EverdoClient("<HOST:PORT>", key="<API_KEY>"))
+```python
+from everdo import EverdoTasks
+
+tasks = EverdoTasks.from_config()              # or EverdoTasks(EverdoClient("<HOST:PORT>", key="<API_KEY>"))
 tid = tasks.create("Buy milk", note="2%", list="i")
-tasks.move(tid, "a")                    # to Next
+tasks.move(tid, "a")                           # to Next
 tasks.move_to_project(tid, project_id)
 tasks.complete(tid)
+```
+
+Tags are server-owned: lookup helpers (`resolve_tag`, `add_tags`, …) stay strict and raise on an
+unknown title, so a typo never mints a junk tag. Use `ensure_tag` for explicit opt-in creation:
+
+```python
+tag = tasks.ensure_tag("~suggest/proj=x")      # return it, creating on the server if absent
+tasks.add_tags(tid, ["~suggest/proj=x"])
+```
+
+Batch mutations cost **two `/sync` round-trips total** (one refresh + one write) regardless of N —
+the way to touch many items without 2N serial calls (the shared `state.json` rules out parallelism):
+
+```python
+tasks.update_many({id1: {"list": "a"}, id2: {"completed_on": None}})
+tasks.add_tags_many([id1, id2], ["finance"])
+tasks.remove_tags_matching("~suggest/*")       # sweep a whole tag family from every item
 ```
 
 ## Docs

@@ -391,11 +391,31 @@ def item_tag_add(
 
 @item_tag_app.command("remove")
 def item_tag_remove(
-    id: Annotated[str, typer.Argument()],
-    names: Annotated[List[str], typer.Argument()],
+    args: Annotated[Optional[List[str]], typer.Argument(
+        help="`<id> <tag>...`; or, with --match, optional id scopes "
+             "(default: all items).")] = None,
+    match: Annotated[Optional[str], typer.Option("--match", "-m",
+           help="Remove every tag whose title matches this glob "
+                "(e.g. '~suggest/*'), in one round-trip.")] = None,
 ) -> None:
-    """Remove the named tags from an item."""
+    """Remove tags from items.
+
+    Explicit form: `item tag remove <id> <tag>...`.
+    Glob form:     `item tag remove --match '<glob>' [<id>...]` removes every
+    matching tag from the given items, or from all items if none are listed.
+    """
     t = _tasks()
+    args = args or []
+    if match:
+        ids = _resolve_ids(t, args) if args else None
+        _emit_items(t.remove_tags_matching(match, item_ids=ids))
+        return
+    if len(args) < 2:
+        raise EverdoError(
+            "usage: `item tag remove <id> <tag>...` or "
+            "`item tag remove --match '<glob>' [<id>...]`"
+        )
+    id, *names = args
     _emit_item(t.remove_tags(_rid(t, id), names))
 
 

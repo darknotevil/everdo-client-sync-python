@@ -58,6 +58,13 @@ everdo-cli item tag remove <ID> urgent           # remove one or more
 everdo-cli item tag set    <ID> finance          # replace tags with exactly these
 ```
 
+To strip a whole tag family in one pass, `item tag remove` takes a `--match` glob instead of an id+titles. Scope is the listed ids, or **all items** when none are given — and it is one `/sync` round-trip regardless of how many items are touched:
+
+```
+everdo-cli item tag remove --match '~suggest/*'            # from every item
+everdo-cli item tag remove --match 'temp-*' <ID> [<ID>...] # only within these items
+```
+
 Filter by tag with `everdo-cli item list --tag finance` (matches inherited tags too).
 
 ## Fail-fast batch resolution

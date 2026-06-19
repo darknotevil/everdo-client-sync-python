@@ -16,9 +16,10 @@ unspecified fields would be lost.
 
 from __future__ import annotations
 
+import fnmatch
 import time
 import uuid
-from typing import Any
+from typing import Any, Callable
 
 from .client import EverdoClient, EverdoError
 
@@ -358,20 +359,59 @@ class EverdoTasks:
 
     def update(self, item_id: str, **fields: Any) -> dict[str, Any]:
         """Change one or more fields of an existing item (sends the whole item)."""
+        return self.update_many({item_id: fields})[0]
+
+    def update_many(
+        self, updates: dict[str, dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Apply field changes to several items in one ``/sync`` round-trip.
+
+        ``updates`` maps item id -> ``{field: value}``. Every target is
+        resolved against the cache first, so an unknown id aborts the whole
+        batch *before* any write. Whole items are sent (bumped ``changed_ts``
+        plus the paired ``*_ts``), so the server's last-write-wins merge
+        resolves field-by-field exactly as :meth:`update` does. Cost is two
+        round-trips total (one forced refresh + one sync) regardless of batch
+        size -- versus two *per item* when looping :meth:`update`.
+        """
+        if not updates:
+            return []
         self._refresh(force=True)
-        current = (self._items or {}).get(item_id)
-        if current is None:
-            raise EverdoError(f"item not found: {item_id}")
-        item = self._clean(current)
+        return self._commit_items(self._build_updates(updates))
+
+    def _build_updates(
+        self, updates: dict[str, dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Materialise whole-item payloads from ``{id: {field: value}}``."""
+        items_by_id = self._items or {}
         ts = _now()
-        for key, value in fields.items():
-            item[key] = value
-            self._stamp(item, key, ts)
-        item["changed_ts"] = ts
-        resp = self.client.sync({"items": [item]})
-        self._apply([item], None, None)
+        built = []
+        for item_id, fields in updates.items():
+            current = items_by_id.get(item_id)
+            if current is None:
+                raise EverdoError(f"item not found: {item_id}")
+            item = self._clean(current)
+            for key, value in fields.items():
+                item[key] = value
+                self._stamp(item, key, ts)
+            item["changed_ts"] = ts
+            built.append(item)
+        return built
+
+    def _commit_items(
+        self, items: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Send already-built whole items in one ``/sync`` and reconcile.
+
+        Mirrors the tail of :meth:`create`: the server may not echo our own
+        write back, so merge locally before applying the response delta.
+        """
+        if not items:
+            return []
+        resp = self.client.sync({"items": items})
+        self._apply(items, None, None)
         self._post_mutation(resp)
-        return item
+        return items
 
     # ---- convenience wrappers -------------------------------------------
     def complete(self, item_id: str) -> dict[str, Any]:
@@ -410,6 +450,15 @@ class EverdoTasks:
         ends up as a brand-new tag.
         """
         self._refresh()
+        return self._resolve_tag_cached(name)
+
+    def _resolve_tag_cached(self, name: str) -> dict[str, Any]:
+        """Tag lookup against the in-memory catalogue without a refresh.
+
+        Lets batch helpers resolve many names after a single forced refresh
+        instead of re-syncing per name (which a ``refresh_ttl`` of 0 would
+        otherwise force).
+        """
         low = (name or "").lower()
         for tg in (self._tags or {}).values():
             if (tg.get("title") or "").lower() == low:
@@ -466,6 +515,94 @@ class EverdoTasks:
     def set_tags_by_name(self, item_id: str, names: list[str]) -> dict[str, Any]:
         """Replace an item's own tag list with exactly the named tags."""
         return self.set_tags(item_id, [self.resolve_tag(n) for n in names])
+
+    # ---- batch tag helpers (one /sync round-trip for the whole set) ------
+    def set_tags_many(
+        self, tags_by_id: dict[str, list[dict]]
+    ) -> list[dict[str, Any]]:
+        """Replace each item's own tag list, all in one ``/sync``."""
+        return self.update_many(
+            {iid: {"tags": tags} for iid, tags in tags_by_id.items()}
+        )
+
+    def add_tags_many(
+        self, item_ids: list[str], names: list[str]
+    ) -> list[dict[str, Any]]:
+        """Add the named tags to every listed item in one ``/sync``.
+
+        Idempotent per item (never clobbers existing tags). Names are resolved
+        against the catalogue up front, so an unknown tag aborts before any
+        write.
+        """
+        self._refresh(force=True)
+        tags = [self._resolve_tag_cached(n) for n in names]
+        updates: dict[str, dict[str, Any]] = {}
+        for item_id in item_ids:
+            item = (self._items or {}).get(item_id)
+            if item is None:
+                raise EverdoError(f"item not found: {item_id}")
+            current = list(item.get("tags") or [])
+            have = {t.get("id") for t in current if isinstance(t, dict)}
+            changed = False
+            for tg in tags:
+                if tg.get("id") not in have:
+                    current.append(tg)
+                    have.add(tg.get("id"))
+                    changed = True
+            if changed:
+                updates[item_id] = {"tags": current}
+        return self._commit_items(self._build_updates(updates))
+
+    def remove_tags_many(
+        self, item_ids: list[str], names: list[str]
+    ) -> list[dict[str, Any]]:
+        """Remove the named tags from every listed item in one ``/sync``."""
+        drop = {(n or "").lower() for n in names}
+        self._refresh(force=True)
+        updates = self._tag_removal_updates(
+            item_ids, lambda title: title.lower() in drop
+        )
+        return self._commit_items(self._build_updates(updates))
+
+    def remove_tags_matching(
+        self, pattern: str, *, item_ids: list[str] | None = None
+    ) -> list[dict[str, Any]]:
+        """Remove every tag whose title matches the glob ``pattern`` in one ``/sync``.
+
+        Scope is ``item_ids`` if given, otherwise *all* cached items -- handy
+        for sweeping a machine-written tag family like ``'~suggest/*'`` out of
+        the whole database. Only items that actually lose a tag are written.
+        """
+        self._refresh(force=True)
+        updates = self._tag_removal_updates(
+            item_ids, lambda title: fnmatch.fnmatch(title, pattern)
+        )
+        return self._commit_items(self._build_updates(updates))
+
+    def _tag_removal_updates(
+        self, item_ids: list[str] | None, predicate: Callable[[str], bool]
+    ) -> dict[str, dict[str, Any]]:
+        """Build ``{id: {'tags': kept}}`` for items losing >=1 tag to ``predicate``.
+
+        Assumes the caller has already refreshed. An explicit but unknown id
+        aborts the batch; ``item_ids=None`` scans every cached item.
+        """
+        if item_ids is None:
+            items = list((self._items or {}).values())
+        else:
+            items = []
+            for iid in item_ids:
+                it = (self._items or {}).get(iid)
+                if it is None:
+                    raise EverdoError(f"item not found: {iid}")
+                items.append(it)
+        updates: dict[str, dict[str, Any]] = {}
+        for item in items:
+            current = list(item.get("tags") or [])
+            kept = [t for t in current if not predicate(_tag_title(t) or "")]
+            if len(kept) != len(current):
+                updates[item["id"]] = {"tags": kept}
+        return updates
 
     def delete(self, item_id: str) -> dict[str, Any]:
         """Delete an item via the deletions channel."""
