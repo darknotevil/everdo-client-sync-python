@@ -16,6 +16,14 @@ Where the item lives. Single-letter code on the wire; the CLI accepts the friend
 | `d`  | trash     | Trash (soft-deleted) |
 | `r`  | archived  | Archived             |
 
+**Not every list is legal for every type.** Actions and projects use all of the
+above. Notes and notebooks (the note family) only ever live in `next` (`a`, the
+visible/active state), `trash` (`d`) or `archived` (`r`) — the desktop app has no
+UI to put them in inbox or an action-scheduling list (someday/scheduled/waiting),
+and an item written into such a state is hidden in the notebook view. The CLI
+enforces this: `item create`/`item set` reject an illegal type/list combination,
+and a new note/notebook defaults to `next` (not `inbox`).
+
 ## type
 
 The CLI takes the friendly name (`item create --type`, `item set --type`, `item list --type`):

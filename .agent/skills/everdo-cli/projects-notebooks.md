@@ -24,7 +24,7 @@ for id in AB12 CD34 EF56; do everdo-cli item set "$id" --parent <PROJECT_ID>; do
 
 ## Auto-promote rule
 
-Items in Inbox, Trash, or Archived (`list ∈ {i, d, r}`) do **NOT** render in project/notebook views even if `parent_id` is set.
+Actions in Inbox, Trash, or Archived (`list ∈ {i, d, r}`) do **NOT** render in a project view even if `parent_id` is set.
 
 `item set --parent` auto-promotes such items to Next (`list=next`); you don't have to do that yourself. To pick a different target list in the same call, pass `--list` alongside `--parent`:
 
@@ -33,6 +33,8 @@ everdo-cli item set <ID> --parent <PROJECT_ID> --list waiting
 ```
 
 Or use the library API: `move_to_project(id, pid, list='w')`.
+
+**Notes are stricter than actions.** A note in a notebook is only rendered when its `list` is `next` (`a`); notes have no someday/scheduled/waiting state. The CLI defaults a new note to `next` and refuses to move a note into an action-scheduling list, so don't pass `--list someday|scheduled|waiting` for notes — use `next` (active), or `trash`/`archived`.
 
 ## list vs parent — don't confuse them
 

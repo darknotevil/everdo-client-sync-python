@@ -49,6 +49,43 @@ IRREGULAR_TS = {"tags": "tags_changed_ts"}
 # Server-derived / runtime-only fields that must not be written back.
 DERIVED = {"is_existing_item", "effective_tags", "parent_ref", "contact_ref"}
 
+# Lists each item type may legally occupy. Actions and projects are the
+# actionable types and use the full set. Notes and notebooks (the note family)
+# only ever live in Active/Trash/Archived in the desktop app -- it offers no way
+# to put a note in Inbox or an action-scheduling list (Someday/Scheduled/
+# Waiting). Writing such a state via the sync API produces a note the app cannot
+# render in its notebook view, so we refuse it here instead of silently
+# corrupting the database.
+_ALL_LISTS = {"i", "a", "w", "s", "m", "d", "r"}
+_NOTE_LISTS = {"a", "d", "r"}
+LEGAL_LISTS = {"a": _ALL_LISTS, "p": _ALL_LISTS, "n": _NOTE_LISTS, "l": _NOTE_LISTS}
+
+_LIST_LABEL = {
+    "i": "inbox", "a": "next", "w": "waiting", "s": "scheduled",
+    "m": "someday", "d": "trash", "r": "archived",
+}
+_TYPE_LABEL = {"a": "action", "p": "project", "n": "note", "l": "notebook"}
+
+
+def _validate_list(item_type: str | None, list_code: str | None) -> None:
+    """Reject a ``list`` value that is illegal for ``item_type``.
+
+    Only constrains the note family (notes/notebooks); actions and projects
+    accept every list. Unknown types are left alone so the guard never blocks a
+    shape it does not understand.
+    """
+    legal = LEGAL_LISTS.get(item_type or "")
+    if legal is None or list_code is None or list_code in legal:
+        return
+    t = _TYPE_LABEL.get(item_type, item_type)
+    where = _LIST_LABEL.get(list_code, list_code)
+    allowed = ", ".join(_LIST_LABEL.get(c, c) for c in ("a", "d", "r") if c in legal)
+    raise EverdoError(
+        f"cannot put a {t} in the {where} list; a {t} can only be in: {allowed}. "
+        f"(The desktop app never creates this state and hides such items in the "
+        f"notebook view.)"
+    )
+
 
 def _now() -> int:
     return int(time.time())
@@ -108,8 +145,18 @@ class EverdoTasks:
         if isinstance(tags, dict):
             self._tags = dict(tags)
 
-    def _save_cache(self) -> None:
-        self.client._save_state(items=self._items or {}, tags=self._tags or {})
+    def _save_cache(self, sync_ts: int | None = None) -> None:
+        """Persist the cache, optionally advancing the sync cursor atomically.
+
+        ``items``, ``tags`` and ``last_sync_ts`` land in a single state write
+        (one ``os.replace``), so the durable cursor is never ahead of the
+        durable items. A cursor left *behind* the items is harmless: the next
+        sync merely re-delivers already-applied (idempotent, id-keyed) changes.
+        """
+        values: dict[str, Any] = {"items": self._items or {}, "tags": self._tags or {}}
+        if sync_ts is not None:
+            values["last_sync_ts"] = sync_ts
+        self.client._save_state(**values)
 
     def _apply(
         self,
@@ -135,10 +182,24 @@ class EverdoTasks:
             if sid:
                 self._tags[sid] = tg
         for d in deletions or []:
-            sid = d.get("sync_id")
-            if sid:
-                self._items.pop(sid, None)
-                self._tags.pop(sid, None)
+            # Tombstones key the deleted entity differently across channels
+            # (``deletions_to_add`` from /sync, the ``deletions`` list from a
+            # full /pull, and our own delete() dicts); accept either spelling.
+            sid = d.get("sync_id") or d.get("id")
+            if not sid:
+                continue
+            # Last-write-wins: a tombstone only evicts the item if it is not
+            # older than the item's last change. An item modified *after* its
+            # deletion ts was resurrected and must survive (a full /pull ships
+            # the entire tombstone history, so without this stale tombstones
+            # would wrongly hide live items). A missing ts always evicts.
+            del_ts = d.get("ts")
+            existing = self._items.get(sid)
+            if existing is not None and del_ts is not None \
+                    and (existing.get("changed_ts") or 0) > del_ts:
+                continue
+            self._items.pop(sid, None)
+            self._tags.pop(sid, None)
 
     def _refresh(self, *, force: bool = False) -> dict[str, Any]:
         """Bring the in-memory cache in sync with the server.
@@ -159,13 +220,17 @@ class EverdoTasks:
             dump = self.client.pull()
             self._items = {it["id"]: it for it in dump.get("items", []) if it.get("id")}
             self._tags = {tg["id"]: tg for tg in dump.get("tags", []) if tg.get("id")}
-            sync_resp = self.client.sync()
+            # A full /pull lists tombstones separately; reconcile them so a
+            # deleted item that still shows up among ``items`` does not linger
+            # in the fresh cache.
+            self._apply(None, None, dump.get("deletions"))
+            sync_resp = self.client.sync(persist_ts=False)
             self._apply(
                 sync_resp.get("items"),
                 sync_resp.get("tags"),
                 sync_resp.get("deletions_to_add"),
             )
-            self._save_cache()
+            self._save_cache(sync_ts=sync_resp.get("sync_ts"))
             self._last_refresh = time.monotonic()
             return {
                 "items": list(self._items.values()),
@@ -174,7 +239,7 @@ class EverdoTasks:
                 "sync_ts": sync_resp.get("sync_ts"),
             }
 
-        resp = self.client.sync()
+        resp = self.client.sync(persist_ts=False)
         delta = {
             "items": resp.get("items", []),
             "tags": resp.get("tags", []),
@@ -182,7 +247,7 @@ class EverdoTasks:
             "sync_ts": resp.get("sync_ts"),
         }
         self._apply(delta["items"], delta["tags"], delta["deletions"])
-        self._save_cache()
+        self._save_cache(sync_ts=resp.get("sync_ts"))
         self._last_refresh = time.monotonic()
         return delta
 
@@ -281,7 +346,7 @@ class EverdoTasks:
             resp.get("tags"),
             resp.get("deletions_to_add"),
         )
-        self._save_cache()
+        self._save_cache(sync_ts=resp.get("sync_ts"))
         self._last_refresh = time.monotonic()
 
     # --------------------------------------------------------------- writing
@@ -296,6 +361,7 @@ class EverdoTasks:
         **fields: Any,
     ) -> str:
         """Create a new item and return its id."""
+        _validate_list(type, list)
         ts = _now()
         item_id = new_sync_id()
         item: dict[str, Any] = {
@@ -350,7 +416,7 @@ class EverdoTasks:
         for key, value in fields.items():
             item[key] = value
             self._stamp(item, key, ts)
-        resp = self.client.sync({"items": [item]})
+        resp = self.client.sync({"items": [item]}, persist_ts=False)
         # The server may not echo our own write back; merge it locally so
         # subsequent reads see it immediately.
         self._apply([item], None, None)
@@ -395,6 +461,13 @@ class EverdoTasks:
                 item[key] = value
                 self._stamp(item, key, ts)
             item["changed_ts"] = ts
+            # Validate the resulting type/list pair only when the change
+            # actually touches one of them. This guards `set --list`/`--type`/
+            # `--parent` (which may move the item) against producing an illegal
+            # state, without retroactively blocking unrelated edits (e.g. a tag
+            # change) on an item that is already in a bad list.
+            if "list" in fields or "type" in fields:
+                _validate_list(item.get("type"), item.get("list"))
             built.append(item)
         return built
 
@@ -408,7 +481,7 @@ class EverdoTasks:
         """
         if not items:
             return []
-        resp = self.client.sync({"items": items})
+        resp = self.client.sync({"items": items}, persist_ts=False)
         self._apply(items, None, None)
         self._post_mutation(resp)
         return items
@@ -487,7 +560,7 @@ class EverdoTasks:
             "type": type, "type_ts": ts,
             "color": color, "color_ts": ts,
         }
-        resp = self.client.sync({"tags": [tag]})
+        resp = self.client.sync({"tags": [tag]}, persist_ts=False)
         # Mirror create(): the server may not echo our own write back, so merge
         # it locally before reconciling with the response.
         self._apply(None, [tag], None)
@@ -607,7 +680,7 @@ class EverdoTasks:
     def delete(self, item_id: str) -> dict[str, Any]:
         """Delete an item via the deletions channel."""
         deletion = {"sync_id": item_id, "entity_type": "i", "ts": _now()}
-        resp = self.client.sync({"deletions": [deletion]})
+        resp = self.client.sync({"deletions": [deletion]}, persist_ts=False)
         self._apply(None, None, [deletion])
         self._post_mutation(resp)
         return resp

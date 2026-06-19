@@ -227,7 +227,9 @@ def _root(
 def item_create(
     title: Annotated[str, typer.Argument(help="Item title.")],
     note: Annotated[Optional[str], typer.Option(help="Note body.")] = None,
-    list_: Annotated[ListName, typer.Option("--list", help="Target list.")] = ListName.inbox,
+    list_: Annotated[Optional[ListName], typer.Option("--list",
+                     help="Target list. Default: inbox for actions/projects, "
+                          "next for notes/notebooks.")] = None,
     type_: Annotated[ItemType, typer.Option("--type", help="Item type.")] = ItemType.action,
     parent: Annotated[Optional[str], typer.Option(help="Parent project/notebook id.")] = None,
     tag: Annotated[Optional[List[str]], typer.Option("--tag", help="Tag by title (repeatable).")] = None,
@@ -238,7 +240,14 @@ def item_create(
     if parent:
         extra["parent_id"] = _rid(t, parent)
     tags = [t.resolve_tag(n) for n in (tag or [])]
-    tid = t.create(title, note=note, list=_LIST_CODE[list_.value],
+    # The note family (notes/notebooks) cannot live in Inbox, so default a new
+    # one to Next (its canonical visible state) rather than the action default
+    # of Inbox. An explicit --list is always honoured (and validated downstream).
+    if list_ is not None:
+        list_code = _LIST_CODE[list_.value]
+    else:
+        list_code = "a" if type_ in (ItemType.note, ItemType.notebook) else "i"
+    tid = t.create(title, note=note, list=list_code,
                    type=_TYPE_CODE[type_.value], tags=tags or None, **extra)
     if state["json"]:
         _emit_item(t.get(tid))

@@ -4,7 +4,7 @@
 
 | Module             | Responsibility |
 |--------------------|----------------|
-| `everdo/client.py` | Low-level transport: HTTP wrapper around `/pull`, `/sync`, `/time`. Persists `last_sync_ts` between runs. |
+| `everdo/client.py` | Low-level transport: HTTP wrapper around `/pull`, `/sync`, `/time`. Can persist `last_sync_ts` (`sync(..., persist_ts=True)`, the default for standalone use), but the cache layer passes `persist_ts=False` and owns the cursor itself. |
 | `everdo/tasks.py`  | High-level item operations. Holds the in-memory cache of items/tags; resolves reads from cache; applies LWW; bumps `*_ts` on writes. |
 | `everdo_cli.py`    | `typer` `noun verb --params` front-end to `EverdoTasks`. ID-prefix resolution, friendly list/type enums, and global `--json` output (incl. structured errors) live here, not in the library. |
 

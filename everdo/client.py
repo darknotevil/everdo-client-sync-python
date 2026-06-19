@@ -131,12 +131,24 @@ class EverdoClient:
         """Full snapshot of the server database."""
         return self._request("POST", "/pull").json()
 
-    def sync(self, changes: dict[str, list] | None = None, last_sync_ts: Any = "__state__") -> dict[str, Any]:
+    def sync(
+        self,
+        changes: dict[str, list] | None = None,
+        last_sync_ts: Any = "__state__",
+        *,
+        persist_ts: bool = True,
+    ) -> dict[str, Any]:
         """Push ``changes`` and pull everything newer than ``last_sync_ts``.
 
         ``changes`` is ``{"items": [...], "tags": [...], "deletions": [...]}``;
-        missing keys default to empty lists. On success the new ``sync_ts`` is
-        persisted as ``last_sync_ts``.
+        missing keys default to empty lists.
+
+        When ``persist_ts`` is true (the default, for standalone transport use)
+        the new ``sync_ts`` is persisted as ``last_sync_ts`` immediately. The
+        cache layer passes ``persist_ts=False`` and persists the cursor itself,
+        atomically together with the delta it applied, so the on-disk cursor can
+        never run ahead of the cached items (which would silently drop changes
+        the server will not resend).
         """
         changes = dict(changes or {})
         for bucket in ("items", "tags", "deletions"):
@@ -151,6 +163,6 @@ class EverdoClient:
             "changes": changes,
         }
         resp = self._request("POST", "/sync", params={"version": self.version}, json_body=body).json()
-        if resp.get("sync_ts") is not None:
+        if persist_ts and resp.get("sync_ts") is not None:
             self._save_state(last_sync_ts=resp["sync_ts"])
         return resp
