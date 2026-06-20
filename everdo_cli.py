@@ -235,7 +235,8 @@ def item_create(
     note: Annotated[Optional[str], typer.Option(help="Note body.")] = None,
     list_: Annotated[Optional[ListName], typer.Option("--list",
                      help="Target list. Default: inbox for actions/projects, "
-                          "next for notes/notebooks.")] = None,
+                          "next for notes/notebooks and for items created "
+                          "inside a project (--parent).")] = None,
     type_: Annotated[ItemType, typer.Option("--type", help="Item type.")] = ItemType.action,
     parent: Annotated[Optional[str], typer.Option(help="Parent project/notebook id.")] = None,
     tag: Annotated[Optional[List[str]], typer.Option("--tag", help="Tag by title (repeatable).")] = None,
@@ -246,13 +247,20 @@ def item_create(
     if parent:
         extra["parent_id"] = _rid(t, parent)
     tags = [t.resolve_tag(n) for n in (tag or [])]
-    # The note family (notes/notebooks) cannot live in Inbox, so default a new
-    # one to Next (its canonical visible state) rather than the action default
-    # of Inbox. An explicit --list is always honoured (and validated downstream).
+    # Default list, when --list is not given (it is always honoured and
+    # validated downstream):
+    #   * The note family (notes/notebooks) cannot live in Inbox, so a new one
+    #     defaults to Next (its canonical visible state).
+    #   * An item created inside a project mirrors the desktop drop-into-project
+    #     rule (see move_to_project): it auto-promotes to Next so it renders in
+    #     the project view instead of hiding in Inbox.
+    #   * Everything else defaults to Inbox.
     if list_ is not None:
         list_code = _LIST_CODE[list_.value]
+    elif type_ in (ItemType.note, ItemType.notebook) or parent:
+        list_code = "a"
     else:
-        list_code = "a" if type_ in (ItemType.note, ItemType.notebook) else "i"
+        list_code = "i"
     tid = t.create(title, note=note, list=list_code,
                    type=_TYPE_CODE[type_.value], tags=tags or None, **extra)
     if state["json"]:
